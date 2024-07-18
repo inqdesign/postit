@@ -1,7 +1,4 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 
 const generatePastelColor = () => {
   const hue = Math.floor(Math.random() * 360);
@@ -12,14 +9,14 @@ const PostItCard = ({ children, rotation = 0, position, onDragStop, id, color, b
   const [isDragging, setIsDragging] = useState(false);
   const cardRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
-  const positionRef = useRef(position);
 
   const handleMouseDown = (e) => {
     e.preventDefault();
     setIsDragging(true);
+    const cardRect = cardRef.current.getBoundingClientRect();
     dragStartRef.current = {
-      x: e.clientX - positionRef.current.x,
-      y: e.clientY - positionRef.current.y
+      x: e.clientX - cardRect.left,
+      y: e.clientY - cardRect.top
     };
   };
 
@@ -27,22 +24,23 @@ const PostItCard = ({ children, rotation = 0, position, onDragStop, id, color, b
     if (!isDragging || !boardRef.current) return;
     const boardRect = boardRef.current.getBoundingClientRect();
     const cardRect = cardRef.current.getBoundingClientRect();
-    
-    let newX = e.clientX - dragStartRef.current.x;
-    let newY = e.clientY - dragStartRef.current.y;
+
+    let newX = e.clientX - boardRect.left - dragStartRef.current.x;
+    let newY = e.clientY - boardRect.top - dragStartRef.current.y;
 
     // Constrain movement within the board boundaries
     newX = Math.max(0, Math.min(newX, boardRect.width - cardRect.width));
     newY = Math.max(0, Math.min(newY, boardRect.height - cardRect.height));
 
-    positionRef.current = { x: newX, y: newY };
     cardRef.current.style.transform = `translate(${newX}px, ${newY}px) rotate(${rotation}deg)`;
   }, [isDragging, rotation, boardRef]);
 
   const handleMouseUp = useCallback(() => {
     if (isDragging) {
       setIsDragging(false);
-      onDragStop(id, positionRef.current);
+      const style = window.getComputedStyle(cardRef.current);
+      const matrix = new DOMMatrix(style.transform);
+      onDragStop(id, { x: matrix.m41, y: matrix.m42 });
     }
   }, [id, isDragging, onDragStop]);
 
@@ -58,31 +56,28 @@ const PostItCard = ({ children, rotation = 0, position, onDragStop, id, color, b
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   useEffect(() => {
-    positionRef.current = position;
     cardRef.current.style.transform = `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)`;
   }, [position, rotation]);
 
   return (
     <div 
       ref={cardRef}
-      className={`absolute cursor-grab hover:cursor-grab active:cursor-grabbing transform hover:scale-105 hover:z-10 ${isDragging ? 'z-50' : ''}`}
       style={{
+        position: 'absolute',
         width: '250px',
-        touchAction: 'none',
+        backgroundColor: color,
+        padding: '10px',
+        borderRadius: '5px',
+        boxShadow: '3px 3px 5px rgba(0,0,0,0.1)',
+        cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
+        transform: `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)`,
+        transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+        zIndex: isDragging ? 1000 : 1
       }}
       onMouseDown={handleMouseDown}
     >
-      <div
-        className="rounded-lg shadow-lg p-4"
-        style={{
-          backgroundColor: color,
-          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.05) 1px, rgba(0,0,0,0.05) 2px)',
-          boxShadow: '3px 3px 5px rgba(0,0,0,0.1), inset 0 0 20px rgba(0,0,0,0.05)',
-        }}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   );
 };
@@ -161,37 +156,43 @@ const EnhancedMessageBoard = () => {
     : messages;
 
   return (
-    <div className="flex h-screen">
+    <div style={{ display: 'flex', height: '100vh' }}>
       {/* Left Sidebar */}
-      <aside className="w-64 bg-gray-100 p-4 border-r overflow-auto">
-        <h2 className="text-xl font-bold mb-4">Users</h2>
+      <aside style={{ width: '250px', backgroundColor: '#f0f0f0', padding: '20px', overflowY: 'auto' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>Users</h2>
         <ul>
           {users.map((user, index) => (
             <li 
               key={index} 
-              className={`mb-2 p-2 rounded cursor-pointer ${selectedUser === user ? 'bg-blue-200' : 'hover:bg-gray-200'}`}
+              style={{
+                marginBottom: '0.5rem',
+                padding: '0.5rem',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                backgroundColor: selectedUser === user ? '#b3e0ff' : userColors[user],
+                color: 'black'
+              }}
               onClick={() => handleUserSelect(user)}
-              style={{ backgroundColor: userColors[user], color: 'black' }}
             >
               {user}
             </li>
           ))}
         </ul>
         {selectedUser && (
-          <Button 
+          <button 
             onClick={() => setSelectedUser(null)} 
-            className="mt-4 w-full"
+            style={{ marginTop: '1rem', width: '100%', padding: '0.5rem' }}
           >
             Clear Filter
-          </Button>
+          </button>
         )}
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 relative bg-white border-l border-r border-gray-200">
-        <div ref={boardRef} className="absolute inset-0 overflow-auto bg-gray-50">
+      <main style={{ flex: 1, position: 'relative', backgroundColor: 'white', border: '1px solid #e0e0e0' }}>
+        <div ref={boardRef} style={{ position: 'absolute', inset: 0, overflow: 'auto', backgroundColor: '#f9f9f9' }}>
           {selectedUser && (
-            <h2 className="text-xl font-bold m-4">Messages from {selectedUser}</h2>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '1rem' }}>Messages from {selectedUser}</h2>
           )}
           {filteredMessages.map((msg) => (
             <PostItCard 
@@ -203,37 +204,33 @@ const EnhancedMessageBoard = () => {
               color={msg.color}
               boardRef={boardRef}
             >
-              <CardHeader>
-                <CardTitle className="text-lg font-bold">{msg.user}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm mb-2">{msg.message}</p>
-                <p className="text-xs text-gray-500">{msg.date}</p>
-              </CardContent>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{msg.user}</h3>
+              <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>{msg.message}</p>
+              <p style={{ fontSize: '0.8rem', color: '#666' }}>{msg.date}</p>
             </PostItCard>
           ))}
         </div>
       </main>
 
       {/* Right Sidebar - New Message Input */}
-      <aside className="w-64 bg-gray-100 p-4 border-l">
-        <h2 className="text-xl font-bold mb-4">New Message</h2>
-        <Input
+      <aside style={{ width: '250px', backgroundColor: '#f0f0f0', padding: '20px' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>New Message</h2>
+        <input
           type="text"
           placeholder="Your Name"
           value={userName}
           onChange={handleUserNameChange}
-          className="mb-2"
+          style={{ width: '100%', marginBottom: '0.5rem', padding: '0.5rem' }}
         />
-        <Input
+        <input
           type="text"
           placeholder="Your Message"
           value={newMessage}
           onChange={handleMessageChange}
           onKeyPress={handleKeyPress}
-          className="mb-2"
+          style={{ width: '100%', marginBottom: '0.5rem', padding: '0.5rem' }}
         />
-        <Button onClick={addMessage}>Add Message</Button>
+        <button onClick={addMessage} style={{ width: '100%', padding: '0.5rem' }}>Add Message</button>
       </aside>
     </div>
   );
