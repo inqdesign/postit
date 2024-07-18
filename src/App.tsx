@@ -1,27 +1,37 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 
-const generatePastelColor = () => {
+const generatePastelColor = (): string => {
   const hue = Math.floor(Math.random() * 360);
   return `hsl(${hue}, 70%, 80%)`;
 };
 
-const PostItCard = ({ children, rotation = 0, position, onDragStop, id, color, boardRef }) => {
+interface PostItCardProps {
+  children: React.ReactNode;
+  rotation?: number;
+  position: { x: number; y: number };
+  onDragStop: (id: number, position: { x: number; y: number }) => void;
+  id: number;
+  color: string;
+  boardRef: React.RefObject<HTMLDivElement>;
+}
+
+const PostItCard: React.FC<PostItCardProps> = ({ children, rotation = 0, position, onDragStop, id, color, boardRef }) => {
   const [isDragging, setIsDragging] = useState(false);
-  const cardRef = useRef(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
 
-  const handleMouseDown = (e) => {
+  const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
-    const cardRect = cardRef.current.getBoundingClientRect();
+    const cardRect = cardRef.current!.getBoundingClientRect();
     dragStartRef.current = {
       x: e.clientX - cardRect.left,
       y: e.clientY - cardRect.top
     };
   };
 
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging || !boardRef.current) return;
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging || !boardRef.current || !cardRef.current) return;
     const boardRect = boardRef.current.getBoundingClientRect();
     const cardRect = cardRef.current.getBoundingClientRect();
 
@@ -36,7 +46,7 @@ const PostItCard = ({ children, rotation = 0, position, onDragStop, id, color, b
   }, [isDragging, rotation, boardRef]);
 
   const handleMouseUp = useCallback(() => {
-    if (isDragging) {
+    if (isDragging && cardRef.current) {
       setIsDragging(false);
       const style = window.getComputedStyle(cardRef.current);
       const matrix = new DOMMatrix(style.transform);
@@ -56,7 +66,9 @@ const PostItCard = ({ children, rotation = 0, position, onDragStop, id, color, b
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   useEffect(() => {
-    cardRef.current.style.transform = `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)`;
+    if (cardRef.current) {
+      cardRef.current.style.transform = `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)`;
+    }
   }, [position, rotation]);
 
   return (
@@ -82,20 +94,30 @@ const PostItCard = ({ children, rotation = 0, position, onDragStop, id, color, b
   );
 };
 
-const EnhancedMessageBoard = () => {
-  const [messages, setMessages] = useState([]);
-  const [users, setUsers] = useState([]);
+interface Message {
+  id: number;
+  user: string;
+  message: string;
+  date: string;
+  rotation: number;
+  position: { x: number; y: number };
+  color: string;
+}
+
+const EnhancedMessageBoard: React.FC = () => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [users, setUsers] = useState<string[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [userName, setUserName] = useState('');
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [userColors, setUserColors] = useState({});
-  const boardRef = useRef(null);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [userColors, setUserColors] = useState<Record<string, string>>({});
+  const boardRef = useRef<HTMLDivElement>(null);
 
-  const handleMessageChange = (e) => {
+  const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
   };
 
-  const handleUserNameChange = (e) => {
+  const handleUserNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUserName(e.target.value);
   };
 
@@ -109,7 +131,7 @@ const EnhancedMessageBoard = () => {
       }
 
       const boardRect = boardRef.current.getBoundingClientRect();
-      const newMsg = {
+      const newMsg: Message = {
         id: Date.now(),
         user: user,
         message: newMessage.trim(),
@@ -132,18 +154,18 @@ const EnhancedMessageBoard = () => {
     }
   }, [newMessage, userName, users, userColors]);
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       addMessage();
     }
   };
 
-  const handleUserSelect = (user) => {
+  const handleUserSelect = (user: string) => {
     setSelectedUser(selectedUser === user ? null : user);
   };
 
-  const handleDragStop = (id, newPosition) => {
+  const handleDragStop = (id: number, newPosition: { x: number; y: number }) => {
     setMessages(prevMessages =>
       prevMessages.map(msg =>
         msg.id === id ? { ...msg, position: newPosition } : msg
